@@ -282,14 +282,17 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- DATA ENGINE ---
+import os
+
+# --- DATA ENGINE ---
 @st.cache_data
 def load_and_process_data():
-    # Resolve absolute path relative to this script
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    csv_path = os.path.join(current_dir, 'clients.csv')
+    # Resolve absolute path relative to app.py directory
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    file_path = os.path.join(BASE_DIR, 'clients.csv')
     
-    # Load CSV using absolute path
-    df = pd.read_csv(csv_path)
+    # Load your CSV
+    df = pd.read_csv(file_path)
     
     # Calculate Churn Probability
     df['Churn_Prob'] = 100 - ((df['Engagement_Score'] * 6) + (df['Service_Quality_Score'] * 4))
