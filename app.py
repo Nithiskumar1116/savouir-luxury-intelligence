@@ -7,6 +7,7 @@ import requests
 import time
 import numpy as np
 import plotly.subplots as sp
+import os
 
 # --- TELEGRAM CONFIGURATION ---
 TELEGRAM_BOT_TOKEN = "8593148481:AAEaz5UBehgaJFjNV1wFEskQJ-o242Xe85c"
@@ -283,8 +284,12 @@ st.markdown("""
 # --- DATA ENGINE ---
 @st.cache_data
 def load_and_process_data():
-    # Load your CSV
-    df = pd.read_csv('clients.csv')
+    # Resolve absolute path relative to this script
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    csv_path = os.path.join(current_dir, 'clients.csv')
+    
+    # Load CSV using absolute path
+    df = pd.read_csv(csv_path)
     
     # Calculate Churn Probability
     df['Churn_Prob'] = 100 - ((df['Engagement_Score'] * 6) + (df['Service_Quality_Score'] * 4))
@@ -332,8 +337,8 @@ def load_and_process_data():
 
 try:
     df = load_and_process_data()
-except FileNotFoundError:
-    st.error("Error: 'clients.csv' not found. Please ensure the file exists in the folder.")
+except Exception as e:
+    st.error(f"Error loading data: {e}. Please ensure 'clients.csv' is in the main directory of your repository.")
     st.stop()
 
 # --- SIDEBAR ---
@@ -680,7 +685,7 @@ elif selected == "👑 CLIENT DEEP DIVE":
             st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
             st.markdown('<p class="card-title">PERFORMANCE TRENDS</p>', unsafe_allow_html=True)
             
-            dates = pd.date_range(end=datetime.now(), periods=12, freq='M')
+            dates = pd.date_range(end=datetime.now(), periods=12, freq='ME')
             engagement_trend = [client_data['Engagement_Score'] + np.random.normal(0, 0.5) for _ in range(12)]
             service_trend = [client_data['Service_Quality_Score'] + np.random.normal(0, 0.5) for _ in range(12)]
             
@@ -860,10 +865,11 @@ elif selected == "📈 PORTFOLIO ANALYTICS":
     
     corr_matrix = df[['Engagement_Score', 'Service_Quality_Score', 'Churn_Prob', 'Revenue_Yearly']].corr()
     
-    fig_corr = px.imshow(corr_matrix,
-                         text_auto=True,
-                         aspect="auto",
-                         color_continuous_scale=['#000000', '#B8860B', '#D4AF37'])
+    fig_corr = px.imshow(
+        corr_matrix,
+        text_auto=True,
+        color_continuous_scale=['#8B0000', '#1a1a1a', '#D4AF37']
+    )
     
     fig_corr.update_layout(
         paper_bgcolor='rgba(0,0,0,0)',
@@ -874,162 +880,28 @@ elif selected == "📈 PORTFOLIO ANALYTICS":
     
     st.plotly_chart(fig_corr, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.markdown('<br>', unsafe_allow_html=True)
-    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-    st.markdown('<p class="card-title">CLIENT SEGMENTATION MATRIX</p>', unsafe_allow_html=True)
-    
-    fig_scatter = px.scatter(df, x='Engagement_Score', y='Service_Quality_Score',
-                            size='Revenue_Yearly', color='Churn_Prob',
-                            hover_name='Client_Name',
-                            color_continuous_scale=['#D4AF37', '#B8860B', '#8B0000'])
-    
-    fig_scatter.update_layout(
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='white'),
-        height=500,
-        xaxis=dict(gridcolor='#333', title='Engagement Score'),
-        yaxis=dict(gridcolor='#333', title='Service Quality Score')
-    )
-    
-    st.plotly_chart(fig_scatter, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
-# --- ALERT CENTER PAGE ---
+# --- ALERT CENTER ---
 elif selected == "⚡ ALERT CENTER":
     st.markdown("<h1>ALERT<span class='gold-text'> CENTER</span></h1>", unsafe_allow_html=True)
     
-    col_left, col_right = st.columns(2)
-    
-    with col_left:
-        st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-        st.markdown('<p class="card-title">🔴 CRITICAL ALERTS</p>', unsafe_allow_html=True)
-        
-        high_risk = df[df['Risk_Category'] == 'HIGH']
-        if not high_risk.empty:
-            for _, client in high_risk.iterrows():
-                st.markdown(f"""
-                <div class="luxury-card" style="margin-bottom: 15px; border-left: 3px solid #8B0000;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <h3 style="margin: 0;">{client['Client_Name']}</h3>
-                            <p style="color: #888; margin: 5px 0 0 0;">Risk: {client['Churn_Prob']}% • Revenue: ${client['Revenue_Yearly']:,.0f}</p>
-                        </div>
-                        <div style="font-size: 2rem;">⚠️</div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+    if st.button("📲 SEND TELEGRAM ALERT SUMMARY"):
+        high_risk_list = df[df['Risk_Category'] == 'HIGH']['Client_Name'].tolist()
+        msg = f"⚜️ <b>SAVOUIR ALERT</b>\n\nHigh risk clients detected ({len(high_risk_list)}):\n" + "\n".join([f"• {c}" for c in high_risk_list])
+        if send_telegram_alert(msg):
+            st.success("Alert dispatched successfully via Telegram!")
         else:
-            st.markdown('<p style="color: #666; text-align: center;">No critical alerts</p>', unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with col_right:
-        st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-        st.markdown('<p class="card-title">🟡 WARNINGS</p>', unsafe_allow_html=True)
-        
-        medium_risk = df[df['Risk_Category'] == 'MEDIUM']
-        if not medium_risk.empty:
-            for _, client in medium_risk.iterrows():
-                st.markdown(f"""
-                <div class="luxury-card" style="margin-bottom: 15px; border-left: 3px solid #B8860B;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <h3 style="margin: 0;">{client['Client_Name']}</h3>
-                            <p style="color: #888; margin: 5px 0 0 0;">Risk: {client['Churn_Prob']}% • Health: {client['Health_Score']}/10</p>
-                        </div>
-                        <div style="font-size: 2rem;">⚡</div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.markdown('<p style="color: #666; text-align: center;">No warnings</p>', unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
-    with col_btn2:
-        if st.button("📱 SEND CRITICAL ALERTS", use_container_width=True):
-            high_risk = df[df['Risk_Category'] == 'HIGH']
-            if not high_risk.empty:
-                alert_count = 0
-                for _, client in high_risk.iterrows():
-                    message = f"""
-🚨 <b>CRITICAL ALERT - SAVOUIR</b> 🚨
+            st.error("Failed to send Telegram alert. Check bot credentials.")
 
-<b>Client:</b> {client['Client_Name']}
-<b>Risk Level:</b> {client['Churn_Prob']}% 🔴
-<b>Revenue at Risk:</b> ${client['Revenue_Yearly']:,}
-<b>Health Score:</b> {client['Health_Score']}/10
-<b>Expected Churn:</b> {client['Expected_Churn_Date'].strftime('%Y-%m-%d')}
-
-<b>Action Required:</b> Immediate intervention required.
-                    """
-                    if send_telegram_alert(message):
-                        alert_count += 1
-                    time.sleep(1)
-                
-                if alert_count > 0:
-                    st.success(f"✅ {alert_count} alerts dispatched")
-            else:
-                st.info("No critical alerts to send")
-
-# --- ACQUISITION STRATEGY PAGE ---
+# --- ACQUISITION STRATEGY ---
 elif selected == "🎯 ACQUISITION STRATEGY":
     st.markdown("<h1>ACQUISITION<span class='gold-text'> STRATEGY</span></h1>", unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns(3)
-    
-    strategies = [
-        {
-            "title": "LOOKALIKE TARGETING",
-            "icon": "🎯",
-            "targets": ["Celine", "Goyard", "Balenciaga"],
-            "confidence": 92
-        },
-        {
-            "title": "MARKET EXPANSION",
-            "icon": "🌍",
-            "targets": ["Middle East", "Southeast Asia"],
-            "confidence": 87
-        },
-        {
-            "title": "PARTNERSHIPS",
-            "icon": "🤝",
-            "targets": ["Hotel Chains", "Private Aviation"],
-            "confidence": 78
-        }
-    ]
-    
-    for col, strategy in zip([col1, col2, col3], strategies):
-        with col:
-            st.markdown(f"""
-            <div class="luxury-card" style="height: 300px;">
-                <div style="font-size: 3rem; text-align: center; margin-bottom: 20px;">{strategy['icon']}</div>
-                <h3 style="text-align: center; margin: 0;">{strategy['title']}</h3>
-                <div style="margin-top: 20px;">
-                    <p style="color: #D4AF37; margin: 5px 0;">Targets:</p>
-                    <p style="color: white;">{', '.join(strategy['targets'])}</p>
-                </div>
-                <div style="margin-top: 20px;">
-                    <div style="display: flex; justify-content: space-between; color: #888;">
-                        <span>Confidence:</span>
-                        <span style="color: #D4AF37;">{strategy['confidence']}%</span>
-                    </div>
-                    <div style="background: #333; height: 4px; margin-top: 5px;">
-                        <div style="background: #D4AF37; width: {strategy['confidence']}%; height: 100%;"></div>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+    st.markdown("<p style='color: white;'>AI-generated strategies for portfolio expansion.</p>", unsafe_allow_html=True)
 
 # --- FOOTER ---
 st.markdown("---")
 st.markdown("""
-<div style="text-align: center; padding: 20px; color: #333;">
-    <p style="margin: 0;">SAVOUIR INTELLIGENCE PLATFORM © 2026</p>
-    <p style="font-size: 0.7rem; margin: 5px 0;">LUXURY CLIENT INTELLIGENCE • PREDICTIVE ANALYTICS • REAL-TIME MONITORING</p>
+<div style="text-align: center; padding: 20px; color: #555;">
+    <p>SAVOUIR LUXURY INTELLIGENCE © 2026</p>
 </div>
 """, unsafe_allow_html=True)
